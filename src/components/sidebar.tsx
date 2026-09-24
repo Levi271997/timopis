@@ -37,6 +37,7 @@ export function Sidebar() {
         <div className="space-y-1">
           <NavLink href="/" label="Dashboard" />
           <NavLink href="/projects" label="Projects" />
+          <NavLink href="/clients" label="Clients" />
           <NavLink href="/chat" label="Chat" />
         </div>
 

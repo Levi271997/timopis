@@ -20,8 +20,18 @@ export type Task = {
 
 export type Project = {
   id: string;
+  clientId: string;
   name: string;
   description: string;
+  color: string;
+};
+
+export type Client = {
+  id: string;
+  name: string;
+  contactName: string;
+  contactEmail: string;
+  initials: string;
   color: string;
 };
 
@@ -49,21 +59,51 @@ export const users: User[] = [
 
 export const currentUser = users[0];
 
+export const clients: Client[] = [
+  {
+    id: "cl1",
+    name: "Internal",
+    contactName: "Levi Jan",
+    contactEmail: "tools@digitalfeet.com",
+    initials: "IN",
+    color: "bg-violet-500",
+  },
+  {
+    id: "cl2",
+    name: "Northwind Traders",
+    contactName: "Priya Nair",
+    contactEmail: "priya@northwindtraders.com",
+    initials: "NT",
+    color: "bg-emerald-500",
+  },
+  {
+    id: "cl3",
+    name: "Cobalt Fitness",
+    contactName: "Marcus Idowu",
+    contactEmail: "marcus@cobaltfitness.io",
+    initials: "CF",
+    color: "bg-amber-500",
+  },
+];
+
 export const projects: Project[] = [
   {
     id: "p1",
+    clientId: "cl1",
     name: "Timopis Launch",
     description: "Ship the v1 app to the team.",
     color: "bg-violet-500",
   },
   {
     id: "p2",
+    clientId: "cl2",
     name: "Marketing Site",
     description: "New landing page and pricing.",
     color: "bg-emerald-500",
   },
   {
     id: "p3",
+    clientId: "cl3",
     name: "Mobile App",
     description: "React Native companion app.",
     color: "bg-amber-500",
@@ -102,6 +142,14 @@ export function userById(id: string): User {
 
 export function projectById(id: string): Project | undefined {
   return projects.find((p) => p.id === id);
+}
+
+export function clientById(id: string): Client | undefined {
+  return clients.find((c) => c.id === id);
+}
+
+export function projectsByClient(clientId: string): Project[] {
+  return projects.filter((p) => p.clientId === clientId);
 }
 
 export function tasksByProject(projectId: string): Task[] {
