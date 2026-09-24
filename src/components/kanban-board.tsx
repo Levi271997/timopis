@@ -8,12 +8,16 @@ import {
   closestCorners,
   useSensor,
   useSensors,
+  type DragEndEvent,
   type DragOverEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
+import { arrayMove } from "@dnd-kit/sortable";
 import { KanbanColumn } from "@/components/kanban-column";
 import { TaskCard } from "@/components/task-card";
 import type { Task, TaskPriority, TaskStatus } from "@/lib/mock-data";
+
+export type SortMode = "high-low" | "low-high" | "free";
 
 const COLUMNS: { status: TaskStatus; label: string }[] = [
   { status: "todo", label: "To do" },
@@ -21,27 +25,45 @@ const COLUMNS: { status: TaskStatus; label: string }[] = [
   { status: "done", label: "Done" },
 ];
 
+const DEFAULT_SORT_MODES: Record<TaskStatus, SortMode> = {
+  todo: "high-low",
+  in_progress: "high-low",
+  done: "high-low",
+};
+
 const PRIORITY_RANK: Record<TaskPriority, number> = {
   high: 0,
   medium: 1,
   low: 2,
 };
 
-function sortByPriority(list: Task[]): Task[] {
-  return [...list].sort(
+function sortTasks(list: Task[], mode: SortMode): Task[] {
+  if (mode === "free") return list;
+  const sorted = [...list].sort(
     (a, b) => PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority],
   );
+  return mode === "low-high" ? sorted.reverse() : sorted;
 }
 
 type ColumnState = Record<TaskStatus, Task[]>;
 
-function groupByStatus(tasks: Task[]): ColumnState {
+function groupByStatus(
+  tasks: Task[],
+  sortModes: Record<TaskStatus, SortMode>,
+): ColumnState {
   return {
-    todo: sortByPriority(tasks.filter((t) => t.status === "todo")),
-    in_progress: sortByPriority(
-      tasks.filter((t) => t.status === "in_progress"),
+    todo: sortTasks(
+      tasks.filter((t) => t.status === "todo"),
+      sortModes.todo,
     ),
-    done: sortByPriority(tasks.filter((t) => t.status === "done")),
+    in_progress: sortTasks(
+      tasks.filter((t) => t.status === "in_progress"),
+      sortModes.in_progress,
+    ),
+    done: sortTasks(
+      tasks.filter((t) => t.status === "done"),
+      sortModes.done,
+    ),
   };
 }
 
@@ -50,8 +72,10 @@ function isTaskStatus(id: string): id is TaskStatus {
 }
 
 export function KanbanBoard({ tasks }: { tasks: Task[] }) {
+  const [sortModes, setSortModes] =
+    useState<Record<TaskStatus, SortMode>>(DEFAULT_SORT_MODES);
   const [columns, setColumns] = useState<ColumnState>(() =>
-    groupByStatus(tasks),
+    groupByStatus(tasks, DEFAULT_SORT_MODES),
   );
   const [activeTask, setActiveTask] = useState<Task | null>(null);
 
@@ -63,6 +87,14 @@ export function KanbanBoard({ tasks }: { tasks: Task[] }) {
     return (Object.keys(columns) as TaskStatus[]).find((status) =>
       columns[status].some((t) => t.id === taskId),
     );
+  }
+
+  function handleSortModeChange(status: TaskStatus, mode: SortMode) {
+    setSortModes((prev) => ({ ...prev, [status]: mode }));
+    setColumns((prev) => ({
+      ...prev,
+      [status]: sortTasks(prev[status], mode),
+    }));
   }
 
   function handleDragStart(event: DragStartEvent) {
@@ -89,17 +121,44 @@ export function KanbanBoard({ tasks }: { tasks: Task[] }) {
       if (taskIndex === -1) return prev;
 
       const [moved] = fromTasks.splice(taskIndex, 1);
-      const toTasks = sortByPriority([
-        ...prev[toStatus],
-        { ...moved, status: toStatus },
-      ]);
+      const movedTask = { ...moved, status: toStatus };
+      const toMode = sortModes[toStatus];
+
+      let toTasks: Task[];
+      if (toMode === "free") {
+        toTasks = [...prev[toStatus]];
+        const overIndex = toTasks.findIndex((t) => t.id === overId);
+        const insertAt = overIndex >= 0 ? overIndex : toTasks.length;
+        toTasks.splice(insertAt, 0, movedTask);
+      } else {
+        toTasks = sortTasks([...prev[toStatus], movedTask], toMode);
+      }
 
       return { ...prev, [fromStatus]: fromTasks, [toStatus]: toTasks };
     });
   }
 
-  function handleDragEnd() {
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
     setActiveTask(null);
+    if (!over) return;
+
+    const activeId = active.id as string;
+    const overId = over.id as string;
+    if (isTaskStatus(overId) || overId === activeId) return;
+
+    const status = columnOf(activeId);
+    if (!status || sortModes[status] !== "free") return;
+
+    const columnTasks = columns[status];
+    const oldIndex = columnTasks.findIndex((t) => t.id === activeId);
+    const newIndex = columnTasks.findIndex((t) => t.id === overId);
+    if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return;
+
+    setColumns((prev) => ({
+      ...prev,
+      [status]: arrayMove(prev[status], oldIndex, newIndex),
+    }));
   }
 
   return (
@@ -117,6 +176,10 @@ export function KanbanBoard({ tasks }: { tasks: Task[] }) {
             status={column.status}
             label={column.label}
             tasks={columns[column.status]}
+            sortMode={sortModes[column.status]}
+            onSortModeChange={(mode) =>
+              handleSortModeChange(column.status, mode)
+            }
           />
         ))}
       </div>
